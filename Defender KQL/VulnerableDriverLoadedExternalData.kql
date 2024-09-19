@@ -1,0 +1,14 @@
+let VulnerableDrivers = (externaldata (Id:string, Author:string, Created:string, Command:string, Description:string, Usecase:string, Category:string, Privileges:string, MitreID:string, OperatingSystem:string, Resources:string, 
+DriverDescription:string, Person:string, Handle:string, Detection:string, KnownVulnerableSamples_MD5:string, KnownVulnerableSamples_SHA1:string, KnownVulnerableSamples_SHA256:string, KnownVulnerableSamples_Publisher:string, 
+KnownVulnerableSamples_Company:string, KnownVulnerableSamples_Description:string, KnownVulnerableSamples_Authentihash_MD5:string, KnownVulnerableSamples_Authentihash_SHA256:string, KnownVulnerableSamples_Authentihash_SHA1:string, Verified:string, Tags:string) 
+["https://www.loldrivers.io/api/drivers.csv"] 
+with (format="csv", ignoreFirstRecord=true));
+let ExpandedDriversSHA1 = VulnerableDrivers
+| extend SHA1_Array = split(KnownVulnerableSamples_SHA1, ', ')
+| mv-expand SHA1_Array to typeof(string)
+| where isnotempty(SHA1_Array);
+DeviceEvents
+| where ActionType contains "DriverLoad"
+| extend SHA1_Array = SHA1
+| project Timestamp, DeviceName, FileName, ActionType, AccountName, SHA1_Array
+| join kind=inner testSHA1 on SHA1_Array
