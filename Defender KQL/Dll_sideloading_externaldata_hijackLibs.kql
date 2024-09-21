@@ -45,9 +45,9 @@ ExpectedLocationsArray_2 = iff(indexof(ExpectedLocationsArray, "%syswow64%") != 
 | extend ExpectedLocationsArray = replace(@"%programfiles(x86)%", "c:\\program files (x86)", ExpectedLocationsArray)
 | extend VulnerableExecutablePathArray = trim(@"\\", VulnerableExecutablePathArray)
 // Extract the executable name from VulnerableExecutablePathArray
-extend VulnerableExecutableName = tostring(split(VulnerableExecutablePathArray, "\\")[-1])
+|extend VulnerableExecutableName = tostring(split(VulnerableExecutablePathArray, "\\")[-1])
 // Handle $version$
-extend ExpectedLocationsArray = iff(ExpectedLocationsArray endswith "$version$", substring(ExpectedLocationsArray, 0, strlen(ExpectedLocationsArray) - strlen("$version$")),ExpectedLocationsArray)
+|extend ExpectedLocationsArray = iff(ExpectedLocationsArray endswith "$version$", substring(ExpectedLocationsArray, 0, strlen(ExpectedLocationsArray) - strlen("$version$")),ExpectedLocationsArray)
 // Further handling for $version$
 | extend 
 PreVersionSegment = iff(indexof(ExpectedLocationsArray, "$version$") != -1,substring(ExpectedLocationsArray, 0, indexof(ExpectedLocationsArray, "$version$")), ""),
@@ -77,10 +77,10 @@ or
     (
         isnotempty(PreVersionSegment) 
         and isnotempty(PostVersionSegment) 
-        and not(FolderPath contains PreVersionSegment) 
+        and not(FolderPath contains PreVersionSegment 
         and FolderPath contains PostVersionSegment)
         or (isnotempty(ExpectedLocationsArray_1) 
         and isnotempty(ExpectedLocationsArray_2) 
         and not(FolderPath contains ExpectedLocationsArray_1 
         or FolderPath contains ExpectedLocationsArray_2))
-    )) and InitiatingProcessFileName == VulnerableExecutableName
+    and InitiatingProcessFileName == VulnerableExecutableName
