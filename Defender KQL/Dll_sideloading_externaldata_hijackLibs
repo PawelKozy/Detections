@@ -1,0 +1,92 @@
+let hijackLibs = externaldata(
+    Name:string,
+    Author:string,
+    Created:string,
+    Vendor:string,
+    CVE:string,
+    ExpectedLocations:string,
+    VulnerableExecutablePath:string,
+    VulnerableExecutableType:string,
+    VulnerableExecutableAutoElevated:string,
+    VulnerableExecutablePrivilegeEscalation:string,
+    VulnerableExecutableCondition:string,
+    VulnerableExecutableSHA256:string,
+    VulnerableExecutableEnvironmentVariable:string,
+    Resources:string,
+    Acknowledgements:string,
+    URL:string
+) [
+    "https://hijacklibs.net/api/hijacklibs.csv"
+] 
+with (format = csv, ignoreFirstRecord = true);
+// Filter data from DeviceImageLoadEvents based on conditions
+let hijackLibsNormalized = hijackLibs
+| extend ExpectedLocations=tolower(ExpectedLocations)
+| extend VulnerableExecutablePath=tolower(VulnerableExecutablePath)
+| extend ExpectedLocationsArray = split(ExpectedLocations, ",")
+| extend VulnerableExecutablePathArray = split(VulnerableExecutablePath, ",")
+| mv-expand ExpectedLocationsArray to typeof(string)
+| mv-expand VulnerableExecutablePathArray to typeof(string)
+| extend ExpectedLocationsArray = trim(" ", ExpectedLocationsArray)
+| extend VulnerableExecutablePathArray = trim(" ", VulnerableExecutablePathArray)
+// Handle I=interchangeability of %syswow64% and %system32%
+|
+extend 
+ExpectedLocationsArray_1 = iff(indexof(ExpectedLocationsArray, "$syswow64$") != -1 or indexof(ExpectedLocationsArray, "$system32$") != -1, 
+    replace("$syswow64$", "c:\\windows\\syswow64", replace("$system32$", "c:\\windows\\syswow64", ExpectedLocationsArray)), ""), 
+ExpectedLocationsArray_2 = iff(indexof(ExpectedLocationsArray, "$syswow64$") != -1 or indexof(ExpectedLocationsArray, "$system32$") != -1, 
+    replace("$syswow64$", "c:\\windows\\system32", replace("$system32$", "c:\\windows\\system32", ExpectedLocationsArray)), "")
+| extend ExpectedLocationsArray = replace(@"%windir%", "c:\\windows", ExpectedLocationsArray)
+| extend ExpectedLocationsArray = replace(@"%syswow64%", "c:\\windows\\syswow64", ExpectedLocationsArray)
+| extend ExpectedLocationsArray = replace(@"%systemroot%", "c:\\windows", ExpectedLocationsArray)
+| extend ExpectedLocationsArray = replace(@"%programdata%", "c:\\programdata", ExpectedLocationsArray)
+| extend ExpectedLocationsArray = replace(@"%localappdata%", "c:\\users\\localadmin\\appdata\\local", ExpectedLocationsArray)
+| extend ExpectedLocationsArray = replace(@"%programfiles%", "c:\\program files", ExpectedLocationsArray)
+| extend ExpectedLocationsArray = replace(@"%programfiles(x86)%", "c:\\program files (x86)", ExpectedLocationsArray)
+| extend VulnerableExecutablePathArray = trim(@"\\", VulnerableExecutablePathArray);
+// Extract the executable name from VulnerableExecutablePathArray
+extend VulnerableExecutableName = tostring(split(VulnerableExecutablePathArray, "\\")[-1]);
+// Handle $version$
+extend ExpectedLocationsArray = iff(
+    ExpectedLocationsArray endswith "$version$",
+    substring(ExpectedLocationsArray, 0, strlen(ExpectedLocationsArray) - strlen("$version$")),
+    ExpectedLocationsArray
+);
+// Further handling for $version$
+| extend 
+PreVersionSegment = iff(indexof(ExpectedLocationsArray, "$version$") != -1,substring(ExpectedLocationsArray, 0, indexof(ExpectedLocationsArray, "$version$")), ""),
+PostVersionSegment = iff(indexof(ExpectedLocationsArray, "$version$") != -1,substring(ExpectedLocationsArray, indexof(ExpectedLocationsArray, "$version$") + strlen("$version$")),"");
+// Filter data from DeviceImageLoadEvents based on conditions
+DeviceImageLoadEvents
+| extend 
+    FileName = tolower(FileName),
+    FolderPath = tolower(FolderPath),
+    InitiatingProcessFileName = tolower(InitiatingProcessFileName)
+| join kind=inner (
+    hijackLibsNormalized
+    | extend 
+        VulnerableExecutableName = tolower(VulnerableExecutableName),
+        ExpectedLocations = ExpectedLocationsArray,
+        PreVersionSegment = PreVersionSegment,
+        PostVersionSegment = PostVersionSegment
+) 
+on $left.FileName == $right.Name
+| where 
+    (
+        not(FolderPath contains ExpectedLocations) 
+        and isempty(PreVersionSegment) 
+        and isempty(PostVersionSegment) 
+        and isempty(ExpectedLocationsArray_2) 
+        and isempty(ExpectedLocationsArray_1)
+    ) 
+or 
+    (
+        isempty(PreVersionSegment) 
+        and isempty(PostVersionSegment) 
+        and not(FolderPath contains PreVersionSegment) 
+        and FolderPath contains PostVersionSegment
+        or (isnotempty(ExpectedLocationsArray_1) 
+        and isnotempty(ExpectedLocationsArray_2) 
+        and not(FolderPath contains ExpectedLocationsArray_1 
+        or FolderPath contains ExpectedLocationsArray_2))
+    )) and InitiatingProcessFileName == VulnerableExecutableName
