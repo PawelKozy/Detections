@@ -46,12 +46,12 @@ ExpectedLocationsArray_2 = iff(indexof(ExpectedLocationsArray, "%syswow64%") != 
 | extend VulnerableExecutablePathArray = trim(@"\\", VulnerableExecutablePathArray)
 // Extract the executable name from VulnerableExecutablePathArray
 |extend VulnerableExecutableName = tostring(split(VulnerableExecutablePathArray, "\\")[-1])
-// Handle $version$
-|extend ExpectedLocationsArray = iff(ExpectedLocationsArray endswith "$version$", substring(ExpectedLocationsArray, 0, strlen(ExpectedLocationsArray) - strlen("$version$")),ExpectedLocationsArray)
-// Further handling for $version$
+// Handle %version%
+|extend ExpectedLocationsArray = iff(ExpectedLocationsArray endswith "%version%", substring(ExpectedLocationsArray, 0, strlen(ExpectedLocationsArray) - strlen("%version%")),ExpectedLocationsArray)
+// Further handling for %version%
 | extend 
-PreVersionSegment = iff(indexof(ExpectedLocationsArray, "$version$") != -1,substring(ExpectedLocationsArray, 0, indexof(ExpectedLocationsArray, "$version$")), ""),
-PostVersionSegment = iff(indexof(ExpectedLocationsArray, "$version$") != -1,substring(ExpectedLocationsArray, indexof(ExpectedLocationsArray, "$version$") + strlen("$version$")),"");
+PreVersionSegment = iff(indexof(ExpectedLocationsArray, "%version%") != -1,substring(ExpectedLocationsArray, 0, indexof(ExpectedLocationsArray, "%version%")), ""),
+PostVersionSegment = iff(indexof(ExpectedLocationsArray, "%version%") != -1,substring(ExpectedLocationsArray, indexof(ExpectedLocationsArray, "%version%") + strlen("%version%")),"");
 // Filter data from DeviceImageLoadEvents based on conditions
 DeviceImageLoadEvents
 | extend 
@@ -67,7 +67,7 @@ DeviceImageLoadEvents
         PostVersionSegment = PostVersionSegment
 ) 
 on $left.FileName == $right.Name
-| where 
+| where (
     (not(FolderPath contains ExpectedLocations) 
         and isempty(PreVersionSegment) 
         and isempty(PostVersionSegment) 
@@ -82,5 +82,5 @@ or
         or (isnotempty(ExpectedLocationsArray_1) 
         and isnotempty(ExpectedLocationsArray_2) 
         and not(FolderPath contains ExpectedLocationsArray_1 
-        or FolderPath contains ExpectedLocationsArray_2))
+        or FolderPath contains ExpectedLocationsArray_2))))
     and InitiatingProcessFileName == VulnerableExecutableName
