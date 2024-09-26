@@ -84,3 +84,4 @@ or
         and not(FolderPath contains ExpectedLocationsArray_1 
         or FolderPath contains ExpectedLocationsArray_2))))
     and InitiatingProcessFileName == VulnerableExecutableName
+| project FileName, FolderPath, SHA1, ExpectedLocations, PreVersionSegment, PostVersionSegment, InitiatingProcessFileName, VulnerableExecutableName, ExpectedLocationsArray_1, ExpectedLocationsArray_2
